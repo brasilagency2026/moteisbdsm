@@ -1490,18 +1490,51 @@ function DashboardPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (
               </div>
               <div className="space-y-2">
                 <Label className="text-white">Localização</Label>
-                <AddressAutocomplete
-                  value={formData.location}
-                  onChange={(value) => updateForm('location', value)}
-                  onPlaceSelect={(suggestion) => {
-                    updateForm('location', suggestion.display_name);
-                    updateForm('coordinates', { 
-                      lat: parseFloat(suggestion.lat), 
-                      lng: parseFloat(suggestion.lon) 
-                    });
-                  }}
-                  placeholder="Digite o endereço do motel..."
-                />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <AddressAutocomplete
+                      value={formData.location}
+                      onChange={(value) => updateForm('location', value)}
+                      onPlaceSelect={(suggestion) => {
+                        updateForm('location', suggestion.display_name);
+                        updateForm('coordinates', {
+                          lat: parseFloat(suggestion.lat),
+                          lng: parseFloat(suggestion.lon)
+                        });
+                      }}
+                      placeholder="Digite o endereço do motel..."
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            updateForm('coordinates', {
+                              lat: position.coords.latitude,
+                              lng: position.coords.longitude
+                            });
+                            updateForm('location', `Lat: ${position.coords.latitude.toFixed(6)}, Lng: ${position.coords.longitude.toFixed(6)}`);
+                          },
+                          (error) => {
+                            alert('Não foi possível obter sua localização. Verifique as permissões do navegador.');
+                          }
+                        );
+                      } else {
+                        alert('Geolocalização não suportada pelo navegador.');
+                      }
+                    }}
+                    className="border-[#FF0033] text-[#FF0033] hover:bg-[#FF0033]/10 shrink-0"
+                    title="Usar minha localização atual"
+                  >
+                    <MapPin className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Lat: {formData.coordinates.lat.toFixed(6)}, Lng: {formData.coordinates.lng.toFixed(6)}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1627,15 +1660,48 @@ function DashboardPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (
               </div>
               <div className="space-y-2">
                 <Label className="text-white">Localização</Label>
-                <AddressAutocomplete
-                  value={formData.location}
-                  onChange={(value) => updateForm('location', value)}
-                  onPlaceSelect={(suggestion) => {
-                    updateForm('location', suggestion.display_name);
-                    updateForm('coordinates', { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) });
-                  }}
-                  placeholder="Buscar endereço..."
-                />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <AddressAutocomplete
+                      value={formData.location}
+                      onChange={(value) => updateForm('location', value)}
+                      onPlaceSelect={(suggestion) => {
+                        updateForm('location', suggestion.display_name);
+                        updateForm('coordinates', { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) });
+                      }}
+                      placeholder="Buscar endereço..."
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            updateForm('coordinates', {
+                              lat: position.coords.latitude,
+                              lng: position.coords.longitude
+                            });
+                            updateForm('location', `Lat: ${position.coords.latitude.toFixed(6)}, Lng: ${position.coords.longitude.toFixed(6)}`);
+                          },
+                          (error) => {
+                            alert('Não foi possível obter sua localização. Verifique as permissões do navegador.');
+                          }
+                        );
+                      } else {
+                        alert('Geolocalização não suportada pelo navegador.');
+                      }
+                    }}
+                    className="border-[#FF0033] text-[#FF0033] hover:bg-[#FF0033]/10 shrink-0"
+                    title="Usar minha localização atual"
+                  >
+                    <MapPin className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Lat: {formData.coordinates.lat.toFixed(6)}, Lng: {formData.coordinates.lng.toFixed(6)}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1793,6 +1859,7 @@ function AdminPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page
     periods: [] as string[],
     description: '',
     images: [] as string[],
+    coordinates: { lat: -23.5505, lng: -46.6333 },
   });
 
   const stats = [
@@ -1837,6 +1904,7 @@ function AdminPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page
       periods: motel.periods,
       description: motel.description,
       images: [...motel.images],
+      coordinates: motel.coordinates,
     });
     setShowEditDialog(true);
   };
@@ -1855,6 +1923,7 @@ function AdminPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page
         description: editFormData.description,
         images: editFormData.images,
         image: editFormData.images[0] || m.image,
+        coordinates: editFormData.coordinates,
       } : m));
       setShowEditDialog(false);
       setSelectedMotelAdmin(null);
@@ -2284,11 +2353,54 @@ function AdminPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page
             </div>
             <div className="space-y-2">
               <Label className="text-white">Localização</Label>
-              <Input 
-                className="bg-[#121212] border-[#333333] text-white"
-                value={editFormData.location}
-                onChange={(e) => setEditFormData(prev => ({ ...prev, location: e.target.value }))}
-              />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <AddressAutocomplete
+                    value={editFormData.location}
+                    onChange={(value) => setEditFormData(prev => ({ ...prev, location: value }))}
+                    onPlaceSelect={(suggestion) => {
+                      setEditFormData(prev => ({
+                        ...prev,
+                        location: suggestion.display_name,
+                        coordinates: { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) }
+                      }));
+                    }}
+                    placeholder="Buscar endereço..."
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          setEditFormData(prev => ({
+                            ...prev,
+                            coordinates: {
+                              lat: position.coords.latitude,
+                              lng: position.coords.longitude
+                            },
+                            location: `Lat: ${position.coords.latitude.toFixed(6)}, Lng: ${position.coords.longitude.toFixed(6)}`
+                          }));
+                        },
+                        (error) => {
+                          alert('Não foi possível obter sua localização. Verifique as permissões do navegador.');
+                        }
+                      );
+                    } else {
+                      alert('Geolocalização não suportada pelo navegador.');
+                    }
+                  }}
+                  className="border-[#FF0033] text-[#FF0033] hover:bg-[#FF0033]/10 shrink-0"
+                  title="Usar minha localização atual"
+                >
+                  <MapPin className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-gray-500">
+                Lat: {editFormData.coordinates.lat.toFixed(6)}, Lng: {editFormData.coordinates.lng.toFixed(6)}
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
