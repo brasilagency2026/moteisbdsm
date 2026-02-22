@@ -2,10 +2,10 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // Users table - synced with Clerk
+  // Users table - with password authentication
   users: defineTable({
-    clerkId: v.string(),
     email: v.string(),
+    passwordHash: v.string(),
     name: v.optional(v.string()),
     image: v.optional(v.string()),
     role: v.union(
@@ -15,7 +15,7 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_clerkId", ["clerkId"]),
+  }).index("by_email", ["email"]),
 
   // Motels table
   motels: defineTable({
@@ -28,7 +28,7 @@ export default defineSchema({
     address: v.optional(v.string()),
     phone: v.optional(v.string()),
     whatsapp: v.optional(v.string()),
-    website: v.optional(v.string()),
+    tripadvisor: v.optional(v.string()),
     email: v.optional(v.string()),
     
     // Coordinates for map
@@ -39,18 +39,14 @@ export default defineSchema({
     images: v.optional(v.array(v.string())),
     mainImage: v.optional(v.string()),
     
-    // Themes and features
-    themes: v.array(v.string()),
+    // Features
     features: v.optional(v.array(v.string())),
     
-    // Pricing
-    priceFrom: v.optional(v.number()),
-    priceTo: v.optional(v.number()),
-    currency: v.optional(v.string()),
+    // Hours and periods
+    hours: v.optional(v.string()),
+    periods: v.optional(v.array(v.string())),
     
-    // Rating and stats
-    rating: v.optional(v.number()),
-    reviewCount: v.optional(v.number()),
+    // Stats
     viewCount: v.optional(v.number()),
     contactCount: v.optional(v.number()),
     
@@ -80,25 +76,6 @@ export default defineSchema({
       searchField: "name",
       filterFields: ["status", "state", "isPremium"],
     }),
-
-  // Reviews table
-  reviews: defineTable({
-    motelId: v.id("motels"),
-    userId: v.id("users"),
-    rating: v.number(),
-    title: v.optional(v.string()),
-    comment: v.optional(v.string()),
-    isAnonymous: v.optional(v.boolean()),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("rejected")
-    ),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_motel", ["motelId"])
-    .index("by_user", ["userId"]),
 
   // Contacts/Leads table
   contacts: defineTable({

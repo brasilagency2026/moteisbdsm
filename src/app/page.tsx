@@ -1233,9 +1233,11 @@ function LoginPage({ setCurrentPage, onLogin }: { setCurrentPage: (page: PageVie
 }
 
 // Dashboard Page
-function DashboardPage({ setCurrentPage }: { setCurrentPage: (page: PageView) => void }) {
-  const [motels] = useState(sampleMotels.slice(0, 2));
+function DashboardPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page: PageView) => void; setSelectedMotel: (motel: Motel) => void }) {
+  const [motels, setMotels] = useState(sampleMotels.slice(0, 2));
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedMotelEdit, setSelectedMotelEdit] = useState<Motel | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -1246,6 +1248,7 @@ function DashboardPage({ setCurrentPage }: { setCurrentPage: (page: PageView) =>
     periods: [] as string[],
     description: '',
     coordinates: { lat: -23.5505, lng: -46.6333 },
+    images: [] as string[],
   });
 
   const updateForm = (field: string, value: string | { lat: number; lng: number } | string[]) => {
@@ -1259,6 +1262,74 @@ function DashboardPage({ setCurrentPage }: { setCurrentPage: (page: PageView) =>
         ? prev.periods.filter(p => p !== period)
         : [...prev.periods, period]
     }));
+  };
+
+  const handleView = (motel: Motel) => {
+    setSelectedMotel(motel);
+    setCurrentPage('motel-detail');
+  };
+
+  const handleEdit = (motel: Motel) => {
+    setSelectedMotelEdit(motel);
+    setFormData({
+      name: motel.name,
+      location: motel.location,
+      phone: motel.phone,
+      whatsapp: motel.whatsapp,
+      tripadvisor: motel.tripadvisor,
+      hours: motel.hours,
+      periods: motel.periods,
+      description: motel.description,
+      coordinates: motel.coordinates,
+      images: [...motel.images],
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddImage = () => {
+    const url = prompt('Cole a URL da imagem:');
+    if (url && url.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        images: [...prev.images, url.trim()]
+      }));
+    }
+  };
+
+  const handlePause = (id: string) => {
+    setMotels(motels.map(m => m.id === id ? { ...m, status: 'paused' as const } : m));
+  };
+
+  const handleActivate = (id: string) => {
+    setMotels(motels.map(m => m.id === id ? { ...m, status: 'active' as const } : m));
+  };
+
+  const handleSaveEdit = () => {
+    if (selectedMotelEdit) {
+      setMotels(motels.map(m => m.id === selectedMotelEdit.id ? {
+        ...m,
+        name: formData.name,
+        location: formData.location,
+        phone: formData.phone,
+        whatsapp: formData.whatsapp,
+        tripadvisor: formData.tripadvisor,
+        hours: formData.hours,
+        periods: formData.periods,
+        description: formData.description,
+        coordinates: formData.coordinates,
+        images: formData.images,
+        image: formData.images[0] || m.image,
+      } : m));
+      setIsEditDialogOpen(false);
+      setSelectedMotelEdit(null);
+    }
   };
 
   const stats = [
@@ -1352,21 +1423,41 @@ function DashboardPage({ setCurrentPage }: { setCurrentPage: (page: PageView) =>
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" className="border-[#333333] text-gray-400 hover:text-white">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleView(motel)}
+                        className="border-[#333333] text-gray-400 hover:text-white"
+                      >
                         <Eye className="w-4 h-4 mr-1" />
                         Ver
                       </Button>
-                      <Button size="sm" variant="outline" className="border-[#333333] text-gray-400 hover:text-white">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => handleEdit(motel)}
+                        className="border-[#333333] text-gray-400 hover:text-white"
+                      >
                         <Edit className="w-4 h-4 mr-1" />
                         Editar
                       </Button>
                       {motel.status === 'active' ? (
-                        <Button size="sm" variant="outline" className="border-[#333333] text-gray-400 hover:text-white">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handlePause(motel.id)}
+                          className="border-[#333333] text-gray-400 hover:text-white"
+                        >
                           <Pause className="w-4 h-4 mr-1" />
                           Pausar
                         </Button>
                       ) : (
-                        <Button size="sm" variant="outline" className="border-[#333333] text-gray-400 hover:text-white">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleActivate(motel.id)}
+                          className="border-[#333333] text-gray-400 hover:text-white"
+                        >
                           <Zap className="w-4 h-4 mr-1" />
                           Ativar
                         </Button>
@@ -1514,13 +1605,174 @@ function DashboardPage({ setCurrentPage }: { setCurrentPage: (page: PageView) =>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Motel Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="bg-[#1E1E1E] border-[#333333] text-white max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Editar Motel</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Atualize as informações do seu motel.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2">
+                <Label className="text-white">Nome do Motel</Label>
+                <Input 
+                  placeholder="Ex: Dungeon Motel" 
+                  className="bg-[#121212] border-[#333333] text-white"
+                  value={formData.name}
+                  onChange={(e) => updateForm('name', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">Localização</Label>
+                <AddressAutocomplete
+                  value={formData.location}
+                  onChange={(value) => updateForm('location', value)}
+                  onPlaceSelect={(suggestion) => {
+                    updateForm('location', suggestion.display_name);
+                    updateForm('coordinates', { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) });
+                  }}
+                  placeholder="Buscar endereço..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-white">Telefone</Label>
+                  <Input 
+                    placeholder="(11) 99999-9999" 
+                    className="bg-[#121212] border-[#333333] text-white"
+                    value={formData.phone}
+                    onChange={(e) => updateForm('phone', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-white">WhatsApp</Label>
+                  <Input 
+                    placeholder="(11) 99999-9999" 
+                    className="bg-[#121212] border-[#333333] text-white"
+                    value={formData.whatsapp}
+                    onChange={(e) => updateForm('whatsapp', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">TripAdvisor (opcional)</Label>
+                <Input 
+                  placeholder="https://tripadvisor.com/..." 
+                  className="bg-[#121212] border-[#333333] text-white"
+                  value={formData.tripadvisor}
+                  onChange={(e) => updateForm('tripadvisor', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">Horário de Funcionamento</Label>
+                <Input 
+                  placeholder="Ex: 24 horas" 
+                  className="bg-[#121212] border-[#333333] text-white"
+                  value={formData.hours}
+                  onChange={(e) => updateForm('hours', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">Períodos</Label>
+                <div className="flex flex-wrap gap-2">
+                  {['2 horas', '4 horas', '12 horas'].map((period) => (
+                    <button
+                      key={period}
+                      onClick={() => togglePeriod(period)}
+                      className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                        formData.periods.includes(period)
+                          ? 'bg-[#FF0033] text-white'
+                          : 'bg-[#121212] text-gray-400 border border-[#333333]'
+                      }`}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">Descrição</Label>
+                <Textarea
+                  placeholder="Descreva seu motel..."
+                  className="bg-[#121212] border-[#333333] text-white min-h-[100px]"
+                  value={formData.description}
+                  onChange={(e) => updateForm('description', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-white">Fotos ({formData.images.length}/15)</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddImage}
+                    disabled={formData.images.length >= 15}
+                    className="border-[#FF0033] text-[#FF0033] hover:bg-[#FF0033]/10"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Adicionar
+                  </Button>
+                </div>
+                {formData.images.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {formData.images.map((img, index) => (
+                      <div key={index} className="relative group">
+                        <img
+                          src={img}
+                          alt={`Foto ${index + 1}`}
+                          className="w-full h-20 object-cover rounded-lg border border-[#333333]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(index)}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        {index === 0 && (
+                          <span className="absolute bottom-1 left-1 bg-[#FF0033] text-white text-[10px] px-1.5 py-0.5 rounded">
+                            Capa
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border-2 border-dashed border-[#333333] rounded-lg p-6 text-center">
+                    <ImageIcon className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                    <p className="text-gray-400 text-sm">Nenhuma foto adicionada</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsEditDialogOpen(false)}
+                className="border-[#333333] text-gray-400"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSaveEdit}
+                className="bg-[#FF0033] hover:bg-[#CC0029] text-white"
+              >
+                Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
 }
 
 // Admin Page
-function AdminPage() {
+function AdminPage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page: PageView) => void; setSelectedMotel: (motel: Motel) => void }) {
   const [motels, setMotels] = useState(sampleMotels);
   const [users] = useState([
     { id: '1', name: 'João Silva', email: 'joao@email.com', role: 'owner' as UserRole, motels: 2, status: 'active' },
@@ -1528,6 +1780,20 @@ function AdminPage() {
     { id: '3', name: 'Pedro Costa', email: 'pedro@email.com', role: 'owner' as UserRole, motels: 1, status: 'pending' },
   ]);
   const [activeTab, setActiveTab] = useState('moteis');
+  const [selectedMotelAdmin, setSelectedMotelAdmin] = useState<Motel | null>(null);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    location: '',
+    phone: '',
+    whatsapp: '',
+    tripadvisor: '',
+    hours: '',
+    periods: [] as string[],
+    description: '',
+    images: [] as string[],
+  });
 
   const stats = [
     { label: 'Total Motéis', value: motels.length, icon: Building2, color: 'text-[#FF0033]' },
@@ -1540,8 +1806,85 @@ function AdminPage() {
     setMotels(motels.map(m => m.id === id ? { ...m, status: 'active' } : m));
   };
 
+  const handlePause = (id: string) => {
+    setMotels(motels.map(m => m.id === id ? { ...m, status: 'paused' } : m));
+  };
+
+  const handleActivate = (id: string) => {
+    setMotels(motels.map(m => m.id === id ? { ...m, status: 'active' } : m));
+  };
+
   const handleDelete = (id: string) => {
-    setMotels(motels.filter(m => m.id !== id));
+    if (confirm('Tem certeza que deseja excluir este motel?')) {
+      setMotels(motels.filter(m => m.id !== id));
+    }
+  };
+
+  const handleView = (motel: Motel) => {
+    setSelectedMotelAdmin(motel);
+    setShowViewDialog(true);
+  };
+
+  const handleEdit = (motel: Motel) => {
+    setSelectedMotelAdmin(motel);
+    setEditFormData({
+      name: motel.name,
+      location: motel.location,
+      phone: motel.phone,
+      whatsapp: motel.whatsapp,
+      tripadvisor: motel.tripadvisor,
+      hours: motel.hours,
+      periods: motel.periods,
+      description: motel.description,
+      images: [...motel.images],
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (selectedMotelAdmin) {
+      setMotels(motels.map(m => m.id === selectedMotelAdmin.id ? {
+        ...m,
+        name: editFormData.name,
+        location: editFormData.location,
+        phone: editFormData.phone,
+        whatsapp: editFormData.whatsapp,
+        tripadvisor: editFormData.tripadvisor,
+        hours: editFormData.hours,
+        periods: editFormData.periods,
+        description: editFormData.description,
+        images: editFormData.images,
+        image: editFormData.images[0] || m.image,
+      } : m));
+      setShowEditDialog(false);
+      setSelectedMotelAdmin(null);
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setEditFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleAddImage = () => {
+    const url = prompt('Cole a URL da imagem:');
+    if (url && url.trim()) {
+      setEditFormData(prev => ({
+        ...prev,
+        images: [...prev.images, url.trim()]
+      }));
+    }
+  };
+
+  const toggleEditPeriod = (period: string) => {
+    setEditFormData(prev => ({
+      ...prev,
+      periods: prev.periods.includes(period)
+        ? prev.periods.filter(p => p !== period)
+        : [...prev.periods, period]
+    }));
   };
 
   return (
@@ -1638,9 +1981,11 @@ function AdminPage() {
                                 ? 'bg-green-500/20 text-green-400' 
                                 : motel.status === 'pending'
                                 ? 'bg-yellow-500/20 text-yellow-400'
-                                : 'bg-gray-500/20 text-gray-400'
+                                : motel.status === 'paused'
+                                ? 'bg-orange-500/20 text-orange-400'
+                                : 'bg-red-500/20 text-red-400'
                             }>
-                              {motel.status === 'active' ? 'Ativo' : motel.status === 'pending' ? 'Pendente' : 'Pausado'}
+                              {motel.status === 'active' ? 'Ativo' : motel.status === 'pending' ? 'Pendente' : motel.status === 'paused' ? 'Pausado' : 'Rejeitado'}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">
@@ -1654,14 +1999,54 @@ function AdminPage() {
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
+                            <div className="flex justify-end gap-1">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => handleView(motel)}
+                                className="text-gray-400 hover:text-white"
+                                title="Ver detalhes"
+                              >
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => handleEdit(motel)}
+                                className="text-gray-400 hover:text-white"
+                                title="Editar"
+                              >
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="text-gray-400 hover:text-[#FF0033]">
+                              {motel.status === 'active' && (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handlePause(motel.id)}
+                                  className="text-orange-400 hover:text-orange-300"
+                                  title="Pausar"
+                                >
+                                  <Pause className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {(motel.status === 'paused' || motel.status === 'pending') && (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleActivate(motel.id)}
+                                  className="text-green-400 hover:text-green-300"
+                                  title="Ativar"
+                                >
+                                  <Zap className="w-4 h-4" />
+                                </Button>
+                              )}
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => handleDelete(motel.id)}
+                                className="text-red-400 hover:text-red-300"
+                                title="Excluir"
+                              >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
@@ -1730,7 +2115,7 @@ function AdminPage() {
                               <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost" className="text-gray-400 hover:text-[#FF0033]">
+                              <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-300">
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
@@ -1805,6 +2190,230 @@ function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* View Motel Dialog */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="bg-[#1E1E1E] border-[#333333] text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Motel</DialogTitle>
+          </DialogHeader>
+          {selectedMotelAdmin && (
+            <div className="space-y-4">
+              <img 
+                src={selectedMotelAdmin.image} 
+                alt={selectedMotelAdmin.name}
+                className="w-full h-48 object-cover rounded-lg"
+              />
+              <div>
+                <h3 className="text-xl font-semibold text-white">{selectedMotelAdmin.name}</h3>
+                <p className="text-gray-400 text-sm flex items-center gap-1 mt-1">
+                  <MapPin className="w-4 h-4" />
+                  {selectedMotelAdmin.location}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-gray-500 text-xs">Telefone</p>
+                  <p className="text-white">{selectedMotelAdmin.phone}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">WhatsApp</p>
+                  <p className="text-white">{selectedMotelAdmin.whatsapp}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Horário</p>
+                  <p className="text-white">{selectedMotelAdmin.hours}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Períodos</p>
+                  <p className="text-white">{selectedMotelAdmin.periods.join(', ')}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs mb-2">Comodidades</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedMotelAdmin.features.map((feature, index) => (
+                    <Badge key={index} variant="secondary" className="bg-[#2A2A2A] text-gray-300">
+                      {feature}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs mb-2">Descrição</p>
+                <p className="text-gray-300 text-sm">{selectedMotelAdmin.description}</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowViewDialog(false)}
+              className="border-[#333333] text-gray-400"
+            >
+              Fechar
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowViewDialog(false);
+                setSelectedMotel(selectedMotelAdmin);
+                setCurrentPage('motel-detail');
+              }}
+              className="bg-[#FF0033] hover:bg-[#CC0029] text-white"
+            >
+              Ver Página Completa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Motel Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="bg-[#1E1E1E] border-[#333333] text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar Motel</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-2">
+              <Label className="text-white">Nome do Motel</Label>
+              <Input 
+                className="bg-[#121212] border-[#333333] text-white"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Localização</Label>
+              <Input 
+                className="bg-[#121212] border-[#333333] text-white"
+                value={editFormData.location}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, location: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-white">Telefone</Label>
+                <Input 
+                  className="bg-[#121212] border-[#333333] text-white"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-white">WhatsApp</Label>
+                <Input 
+                  className="bg-[#121212] border-[#333333] text-white"
+                  value={editFormData.whatsapp}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, whatsapp: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">TripAdvisor</Label>
+              <Input 
+                className="bg-[#121212] border-[#333333] text-white"
+                value={editFormData.tripadvisor}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, tripadvisor: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Horário</Label>
+              <Input 
+                className="bg-[#121212] border-[#333333] text-white"
+                value={editFormData.hours}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, hours: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Períodos</Label>
+              <div className="flex flex-wrap gap-2">
+                {['2 horas', '4 horas', '12 horas'].map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => toggleEditPeriod(period)}
+                    className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+                      editFormData.periods.includes(period)
+                        ? 'bg-[#FF0033] text-white'
+                        : 'bg-[#121212] text-gray-400 border border-[#333333]'
+                    }`}
+                  >
+                    {period}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-white">Descrição</Label>
+              <Textarea
+                className="bg-[#121212] border-[#333333] text-white min-h-[100px]"
+                value={editFormData.description}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-white">Fotos ({editFormData.images.length}/15)</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddImage}
+                  disabled={editFormData.images.length >= 15}
+                  className="border-[#FF0033] text-[#FF0033] hover:bg-[#FF0033]/10"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Adicionar
+                </Button>
+              </div>
+              {editFormData.images.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {editFormData.images.map((img, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={img}
+                        alt={`Foto ${index + 1}`}
+                        className="w-full h-20 object-cover rounded-lg border border-[#333333]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      {index === 0 && (
+                        <span className="absolute bottom-1 left-1 bg-[#FF0033] text-white text-[10px] px-1.5 py-0.5 rounded">
+                          Capa
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-[#333333] rounded-lg p-6 text-center">
+                  <ImageIcon className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm">Nenhuma foto adicionada</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowEditDialog(false)}
+              className="border-[#333333] text-gray-400"
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveEdit}
+              className="bg-[#FF0033] hover:bg-[#CC0029] text-white"
+            >
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2290,9 +2899,9 @@ export default function Home() {
       case 'entrar':
         return <LoginPage setCurrentPage={setCurrentPage} onLogin={handleLogin} />;
       case 'dashboard':
-        return isAuthenticated ? <DashboardPage setCurrentPage={setCurrentPage} /> : <LoginPage setCurrentPage={setCurrentPage} onLogin={handleLogin} />;
+        return isAuthenticated ? <DashboardPage setCurrentPage={setCurrentPage} setSelectedMotel={setSelectedMotel} /> : <LoginPage setCurrentPage={setCurrentPage} onLogin={handleLogin} />;
       case 'admin':
-        return isAuthenticated && user?.role === 'admin' ? <AdminPage /> : <LoginPage setCurrentPage={setCurrentPage} onLogin={handleLogin} />;
+        return isAuthenticated && user?.role === 'admin' ? <AdminPage setCurrentPage={setCurrentPage} setSelectedMotel={setSelectedMotel} /> : <LoginPage setCurrentPage={setCurrentPage} onLogin={handleLogin} />;
       default:
         return <HomePage setCurrentPage={setCurrentPage} setSelectedMotel={setSelectedMotel} />;
     }

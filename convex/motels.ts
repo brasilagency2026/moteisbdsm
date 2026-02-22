@@ -1,81 +1,62 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { Id } from "./_generated/dataModel";
+import crypto from "crypto";
 
-// =============================================
-// USER MUTATIONS
-// =============================================
+// Password hashing function
+const hashPassword = (password: string) => 
+  crypto.createHash('sha256').update(password + 'bdsmbrazil_salt').digest('hex');
 
-// Create or update user from Clerk webhook
-export const createOrUpdateUser = mutation({
-  args: {
-    clerkId: v.string(),
-    email: v.string(),
-    name: v.optional(v.string()),
-    image: v.optional(v.string()),
-    role: v.optional(v.union(v.literal("user"), v.literal("owner"), v.literal("admin"))),
-  },
-  handler: async (ctx, args) => {
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-
-    const now = Date.now();
-
-    if (existingUser) {
-      await ctx.db.patch(existingUser._id, {
-        email: args.email,
-        name: args.name,
-        image: args.image,
-        role: args.role || existingUser.role,
-        updatedAt: now,
-      });
-      return existingUser._id;
-    }
-
-    return await ctx.db.insert("users", {
-      clerkId: args.clerkId,
-      email: args.email,
-      name: args.name,
-      image: args.image,
-      role: args.role || "user",
-      createdAt: now,
-      updatedAt: now,
-    });
+// Get all motels
+export const getAll = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("motels").collect();
   },
 });
 
-// Get user by Clerk ID
-export const getUserByClerkId = query({
-  args: { clerkId: v.string() },
+// Get motels by status
+export const getByStatus = query({
+  args: {
+    status: v.union(
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("rejected")
+    ),
+  },
   handler: async (ctx, args) => {
     return await ctx.db
-      .query("users")
-      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
-      .first();
+      .query("motels")
+      .withIndex("by_status", (q) => q.eq("status", args.status))
+      .collect();
   },
 });
 
-// Update user role
-export const updateUserRole = mutation({
+// Get motels by owner
+export const getByOwner = query({
   args: {
-    userId: v.id("users"),
-    role: v.union(v.literal("user"), v.literal("owner"), v.literal("admin")),
+    ownerId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, {
-      role: args.role,
-      updatedAt: Date.now(),
-    });
+    return await ctx.db
+      .query("motels")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
+      .collect();
   },
 });
 
-// =============================================
-// MOTEL MUTATIONS & QUERIES
-// =============================================
+// Get single motel
+export const getById = query({
+  args: {
+    id: v.id("motels"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
 
-// Create a new motel
-export const createMotel = mutation({
+// Create motel
+export const create = mutation({
   args: {
     ownerId: v.id("users"),
     name: v.string(),
@@ -86,99 +67,33 @@ export const createMotel = mutation({
     address: v.optional(v.string()),
     phone: v.optional(v.string()),
     whatsapp: v.optional(v.string()),
-    website: v.optional(v.string()),
+    tripadvisor: v.optional(v.string()),
     email: v.optional(v.string()),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
-    mainImage: v.optional(v.string()),
     images: v.optional(v.array(v.string())),
-    themes: v.array(v.string()),
+    mainImage: v.optional(v.string()),
     features: v.optional(v.array(v.string())),
-    priceFrom: v.optional(v.number()),
-    priceTo: v.optional(v.number()),
+    hours: v.optional(v.string()),
+    periods: v.optional(v.array(v.string())),
     isPremium: v.boolean(),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    return await ctx.db.insert("motels", {
+    const motelId = await ctx.db.insert("motels", {
       ...args,
       status: "pending",
-      rating: 0,
-      reviewCount: 0,
       viewCount: 0,
       contactCount: 0,
       createdAt: now,
       updatedAt: now,
     });
-  },
-});
-
-// Get all motels (with filters)
-export const getMotels = query({
-  args: {
-    status: v.optional(v.union(
-      v.literal("pending"),
-      v.literal("active"),
-      v.literal("paused"),
-      v.literal("rejected")
-    )),
-    state: v.optional(v.string()),
-    isPremium: v.optional(v.boolean()),
-    searchQuery: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    let query = ctx.db.query("motels");
-
-    if (args.status) {
-      query = query.withIndex("by_status", (q) => q.eq("status", args.status!));
-    }
-
-    let motels = await query.collect();
-
-    // Apply filters
-    if (args.state) {
-      motels = motels.filter((m) => m.state === args.state);
-    }
-
-    if (args.isPremium !== undefined) {
-      motels = motels.filter((m) => m.isPremium === args.isPremium);
-    }
-
-    if (args.searchQuery) {
-      const searchLower = args.searchQuery.toLowerCase();
-      motels = motels.filter(
-        (m) =>
-          m.name.toLowerCase().includes(searchLower) ||
-          m.location.toLowerCase().includes(searchLower) ||
-          m.themes.some((t) => t.toLowerCase().includes(searchLower))
-      );
-    }
-
-    return motels;
-  },
-});
-
-// Get motel by ID
-export const getMotelById = query({
-  args: { id: v.id("motels") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
-  },
-});
-
-// Get motels by owner
-export const getMotelsByOwner = query({
-  args: { ownerId: v.id("users") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("motels")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .collect();
+    return motelId;
   },
 });
 
 // Update motel
-export const updateMotel = mutation({
+export const update = mutation({
   args: {
     id: v.id("motels"),
     name: v.optional(v.string()),
@@ -189,23 +104,16 @@ export const updateMotel = mutation({
     address: v.optional(v.string()),
     phone: v.optional(v.string()),
     whatsapp: v.optional(v.string()),
-    website: v.optional(v.string()),
+    tripadvisor: v.optional(v.string()),
     email: v.optional(v.string()),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
-    mainImage: v.optional(v.string()),
     images: v.optional(v.array(v.string())),
-    themes: v.optional(v.array(v.string())),
+    mainImage: v.optional(v.string()),
     features: v.optional(v.array(v.string())),
-    priceFrom: v.optional(v.number()),
-    priceTo: v.optional(v.number()),
+    hours: v.optional(v.string()),
+    periods: v.optional(v.array(v.string())),
     isPremium: v.optional(v.boolean()),
-    status: v.optional(v.union(
-      v.literal("pending"),
-      v.literal("active"),
-      v.literal("paused"),
-      v.literal("rejected")
-    )),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
@@ -216,33 +124,49 @@ export const updateMotel = mutation({
   },
 });
 
-// Delete motel
-export const deleteMotel = mutation({
-  args: { id: v.id("motels") },
+// Update motel status (admin)
+export const updateStatus = mutation({
+  args: {
+    id: v.id("motels"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("rejected")
+    ),
+  },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      status: args.status,
+      updatedAt: now,
+      ...(args.status === "active" ? { approvedAt: now } : {}),
+    });
   },
 });
 
-// Approve motel (admin only)
-export const approveMotel = mutation({
+// Approve motel (admin)
+export const approve = mutation({
   args: {
     id: v.id("motels"),
     approvedBy: v.id("users"),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
     await ctx.db.patch(args.id, {
       status: "active",
-      approvedAt: Date.now(),
+      approvedAt: now,
       approvedBy: args.approvedBy,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
   },
 });
 
-// Reject motel (admin only)
-export const rejectMotel = mutation({
-  args: { id: v.id("motels") },
+// Reject motel (admin)
+export const reject = mutation({
+  args: {
+    id: v.id("motels"),
+  },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       status: "rejected",
@@ -251,23 +175,21 @@ export const rejectMotel = mutation({
   },
 });
 
-// Pause/Resume motel
-export const toggleMotelStatus = mutation({
+// Delete motel
+export const remove = mutation({
   args: {
     id: v.id("motels"),
-    status: v.union(v.literal("active"), v.literal("paused")),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
-      status: args.status,
-      updatedAt: Date.now(),
-    });
+    await ctx.db.delete(args.id);
   },
 });
 
 // Increment view count
-export const incrementViewCount = mutation({
-  args: { id: v.id("motels") },
+export const incrementViews = mutation({
+  args: {
+    id: v.id("motels"),
+  },
   handler: async (ctx, args) => {
     const motel = await ctx.db.get(args.id);
     if (motel) {
@@ -278,116 +200,44 @@ export const incrementViewCount = mutation({
   },
 });
 
-// =============================================
-// REVIEW MUTATIONS & QUERIES
-// =============================================
-
-// Create review
-export const createReview = mutation({
+// Increment contact count
+export const incrementContacts = mutation({
   args: {
-    motelId: v.id("motels"),
-    userId: v.id("users"),
-    rating: v.number(),
-    title: v.optional(v.string()),
-    comment: v.optional(v.string()),
-    isAnonymous: v.optional(v.boolean()),
+    id: v.id("motels"),
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
-    return await ctx.db.insert("reviews", {
-      ...args,
-      status: "pending",
-      createdAt: now,
-      updatedAt: now,
-    });
-  },
-});
-
-// Get reviews by motel
-export const getReviewsByMotel = query({
-  args: { motelId: v.id("motels") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("reviews")
-      .withIndex("by_motel", (q) => q.eq("motelId", args.motelId))
-      .filter((q) => q.eq(q.field("status"), "approved"))
-      .collect();
-  },
-});
-
-// =============================================
-// CONTACT TRACKING
-// =============================================
-
-// Track contact
-export const trackContact = mutation({
-  args: {
-    motelId: v.id("motels"),
-    type: v.union(
-      v.literal("phone"),
-      v.literal("whatsapp"),
-      v.literal("email"),
-      v.literal("website")
-    ),
-    userId: v.optional(v.id("users")),
-    ipAddress: v.optional(v.string()),
-    userAgent: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    // Increment contact count
-    const motel = await ctx.db.get(args.motelId);
+    const motel = await ctx.db.get(args.id);
     if (motel) {
-      await ctx.db.patch(args.motelId, {
+      await ctx.db.patch(args.id, {
         contactCount: (motel.contactCount || 0) + 1,
       });
     }
-
-    return await ctx.db.insert("contacts", {
-      ...args,
-      createdAt: Date.now(),
-    });
   },
 });
 
-// =============================================
-// STATS QUERIES
-// =============================================
-
-// Get dashboard stats for owner
-export const getOwnerStats = query({
-  args: { ownerId: v.id("users") },
-  handler: async (ctx, args) => {
-    const motels = await ctx.db
-      .query("motels")
-      .withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId))
-      .collect();
-
-    const totalViews = motels.reduce((sum, m) => sum + (m.viewCount || 0), 0);
-    const totalContacts = motels.reduce((sum, m) => sum + (m.contactCount || 0), 0);
-
-    return {
-      motelCount: motels.length,
-      totalViews,
-      totalContacts,
-      activeMotels: motels.filter((m) => m.status === "active").length,
-      pendingMotels: motels.filter((m) => m.status === "pending").length,
-    };
-  },
-});
-
-// Get admin stats
-export const getAdminStats = query({
+// Seed initial super admin (run once)
+export const seedSuperAdmin = mutation({
   handler: async (ctx) => {
-    const motels = await ctx.db.query("motels").collect();
-    const users = await ctx.db.query("users").collect();
-
-    return {
-      totalMotels: motels.length,
-      activeMotels: motels.filter((m) => m.status === "active").length,
-      pendingMotels: motels.filter((m) => m.status === "pending").length,
-      premiumMotels: motels.filter((m) => m.isPremium).length,
-      totalUsers: users.length,
-      owners: users.filter((u) => u.role === "owner").length,
-    };
+    // Check if admin already exists
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", "glwebagency2@gmail.com"))
+      .first();
+    
+    if (existing) {
+      return { message: "Super admin already exists", userId: existing._id };
+    }
+    
+    const now = Date.now();
+    const userId = await ctx.db.insert("users", {
+      email: "glwebagency2@gmail.com",
+      passwordHash: hashPassword("admin12345"),
+      name: "Super Admin",
+      role: "admin",
+      createdAt: now,
+      updatedAt: now,
+    });
+    
+    return { message: "Super admin created", userId };
   },
 });
