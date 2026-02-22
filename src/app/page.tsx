@@ -537,16 +537,18 @@ function MapComponent({
 }
 
 // Navbar Component
-function Navbar({ 
-  currentPage, 
-  setCurrentPage, 
-  user, 
-  isAuthenticated 
-}: { 
-  currentPage: PageView; 
+function Navbar({
+  currentPage,
+  setCurrentPage,
+  user,
+  isAuthenticated,
+  onLogout
+}: {
+  currentPage: PageView;
   setCurrentPage: (page: PageView) => void;
   user: User | null;
   isAuthenticated: boolean;
+  onLogout: () => void;
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -636,7 +638,10 @@ function Navbar({
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator className="bg-[#333333]" />
-                  <DropdownMenuItem className="focus:bg-[#2A2A2A] cursor-pointer text-[#FF0033]">
+                  <DropdownMenuItem
+                    onClick={onLogout}
+                    className="focus:bg-[#2A2A2A] cursor-pointer text-[#FF0033]"
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sair</span>
                   </DropdownMenuItem>
@@ -1173,7 +1178,86 @@ function AboutPage({ setCurrentPage }: { setCurrentPage: (page: PageView) => voi
 }
 
 // Login Page
-function LoginPage({ setCurrentPage, onLogin }: { setCurrentPage: (page: PageView) => void; onLogin: (role: UserRole) => void }) {
+function LoginPage({ setCurrentPage, onLogin }: { setCurrentPage: (page: PageView) => void; onLogin: (user: { id: string; email: string; name: string; role: UserRole }) => void }) {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    try {
+      if (isLogin) {
+        // Login
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'login',
+            email,
+            password,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          onLogin(data.user);
+        } else {
+          setError(data.error || 'Erro ao fazer login');
+        }
+      } else {
+        // Register
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register',
+            email,
+            password,
+            name,
+            role: 'owner',
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // After registration, login automatically
+          const loginResponse = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'login',
+              email,
+              password,
+            }),
+          });
+
+          const loginData = await loginResponse.json();
+
+          if (loginData.success) {
+            onLogin(loginData.user);
+          } else {
+            setError('Conta criada! Faça login para continuar.');
+            setIsLogin(true);
+          }
+        } else {
+          setError(data.error || 'Erro ao criar conta');
+        }
+      }
+    } catch (err) {
+      setError('Erro de conexão. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-8">
       <Card className="w-full max-w-md bg-[#1E1E1E] border-[#333333]">
@@ -1185,47 +1269,105 @@ function LoginPage({ setCurrentPage, onLogin }: { setCurrentPage: (page: PageVie
               className="h-16 w-16 object-contain"
             />
           </div>
-          <CardTitle className="text-2xl text-white">Entrar</CardTitle>
+          <CardTitle className="text-2xl text-white">
+            {isLogin ? 'Entrar' : 'Criar Conta'}
+          </CardTitle>
           <CardDescription className="text-gray-400">
-            Acesse sua conta para gerenciar seus motéis
+            {isLogin 
+              ? 'Acesse sua conta para gerenciar seus motéis'
+              : 'Crie sua conta de proprietário de motel'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-white">Email</Label>
-            <Input type="email" placeholder="seu@email.com" className="bg-[#121212] border-[#333333] text-white" />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-white">Senha</Label>
-            <Input type="password" placeholder="••••••••" className="bg-[#121212] border-[#333333] text-white" />
-          </div>
-          <Button 
-            className="w-full bg-[#FF0033] hover:bg-[#CC0029] text-white"
-            onClick={() => onLogin('owner')}
-          >
-            Entrar
-          </Button>
-          <div className="text-center text-sm text-gray-400">
-            Não tem uma conta?{' '}
-            <button className="text-[#FF0033] hover:underline">
-              Cadastre-se
-            </button>
-          </div>
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-[#333333]" />
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label className="text-white">Nome</Label>
+                <Input 
+                  type="text" 
+                  placeholder="Seu nome" 
+                  className="bg-[#121212] border-[#333333] text-white"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required={!isLogin}
+                />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label className="text-white">Email</Label>
+              <Input 
+                type="email" 
+                placeholder="seu@email.com" 
+                className="bg-[#121212] border-[#333333] text-white"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[#1E1E1E] px-2 text-gray-400">ou</span>
+            <div className="space-y-2">
+              <Label className="text-white">Senha</Label>
+              <Input 
+                type="password" 
+                placeholder="••••••••" 
+                className="bg-[#121212] border-[#333333] text-white"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
             </div>
+
+            {error && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+
+            <Button 
+              type="submit"
+              className="w-full bg-[#FF0033] hover:bg-[#CC0029] text-white"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {isLogin ? 'Entrando...' : 'Criando conta...'}
+                </div>
+              ) : (
+                isLogin ? 'Entrar' : 'Criar Conta'
+              )}
+            </Button>
+          </form>
+
+          <div className="mt-4 text-center text-sm text-gray-400">
+            {isLogin ? (
+              <>
+                Não tem uma conta?{' '}
+                <button 
+                  onClick={() => { setIsLogin(false); setError(''); }}
+                  className="text-[#FF0033] hover:underline"
+                >
+                  Cadastre-se
+                </button>
+              </>
+            ) : (
+              <>
+                Já tem uma conta?{' '}
+                <button 
+                  onClick={() => { setIsLogin(true); setError(''); }}
+                  className="text-[#FF0033] hover:underline"
+                >
+                  Faça login
+                </button>
+              </>
+            )}
           </div>
-          <Button 
-            variant="outline" 
-            className="w-full border-[#333333] text-gray-300 hover:text-white hover:bg-[#2A2A2A]"
-            onClick={() => onLogin('admin')}
-          >
-            Entrar como Admin (Demo)
-          </Button>
+
+          <div className="mt-4 pt-4 border-t border-[#333333]">
+            <p className="text-xs text-gray-500 text-center">
+              Super Admin: glwebagency2@gmail.com
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -3060,19 +3202,48 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [selectedMotel, setSelectedMotel] = useState<Motel | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const handleLogin = (role: UserRole) => {
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth?action=check');
+        const data = await response.json();
+        if (data.success && data.user) {
+          setUser(data.user);
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogin = (userData: { id: string; email: string; name: string; role: UserRole }) => {
     setIsAuthenticated(true);
     setUser({
-      id: '1',
-      name: role === 'admin' ? 'Admin' : 'Proprietário',
-      email: role === 'admin' ? 'admin@bdsmbrazil.com.br' : 'proprietario@motel.com.br',
-      role,
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role,
     });
     setCurrentPage('dashboard');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout' }),
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
     setIsAuthenticated(false);
     setUser(null);
     setCurrentPage('home');
@@ -3101,14 +3272,21 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#121212]">
-      <Navbar 
-        currentPage={currentPage} 
-        setCurrentPage={setCurrentPage} 
-        user={user} 
-        isAuthenticated={isAuthenticated} 
+      <Navbar
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        user={user}
+        isAuthenticated={isAuthenticated}
+        onLogout={handleLogout}
       />
       <main className="flex-1 pt-16">
-        {renderPage()}
+        {isLoadingAuth ? (
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="w-8 h-8 border-4 border-[#FF0033] border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          renderPage()
+        )}
       </main>
       <Footer setCurrentPage={setCurrentPage} />
     </div>
