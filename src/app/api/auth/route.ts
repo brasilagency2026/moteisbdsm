@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ConvexHttpClient } from 'convex/browser';
-import { api } from '@/convex/_generated/api';
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -12,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (action === 'login') {
       // Login
       try {
-        const user = await convex.mutation(api.auth.login, {
+        const user = await convex.mutation('auth:login', {
           email,
           password,
         });
@@ -28,7 +27,7 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Set a simple session cookie (in production, use JWT or proper session management)
+        // Set a simple session cookie
         response.cookies.set('session', JSON.stringify({
           userId: user.id,
           email: user.email,
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
     if (action === 'register') {
       // Register new user
       try {
-        const userId = await convex.mutation(api.auth.createUser, {
+        const userId = await convex.mutation('auth:createUser', {
           email,
           password,
           name: name || email.split('@')[0],

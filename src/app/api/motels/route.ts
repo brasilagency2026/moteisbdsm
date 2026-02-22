@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ConvexHttpClient } from 'convex/browser';
-import { api } from '@/convex/_generated/api';
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -14,11 +13,11 @@ export async function GET(request: NextRequest) {
     let motels;
 
     if (status) {
-      motels = await convex.query(api.motels.getByStatus, { status: status as any });
+      motels = await convex.query('motels:getByStatus', { status });
     } else if (ownerId) {
-      motels = await convex.query(api.motels.getByOwner, { ownerId: ownerId as any });
+      motels = await convex.query('motels:getByOwner', { ownerId });
     } else {
-      motels = await convex.query(api.motels.getAll);
+      motels = await convex.query('motels:getAll');
     }
 
     return NextResponse.json({
@@ -38,7 +37,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const motel = await convex.mutation(api.motels.create, {
+    const motel = await convex.mutation('motels:create', {
       ownerId: body.ownerId,
       name: body.name,
       description: body.description,
@@ -77,7 +76,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
-    await convex.mutation(api.motels.update, {
+    await convex.mutation('motels:update', {
       id: body.id,
       name: body.name,
       description: body.description,
@@ -122,7 +121,7 @@ export async function DELETE(request: NextRequest) {
       }, { status: 400 });
     }
 
-    await convex.mutation(api.motels.remove, { id: id as any });
+    await convex.mutation('motels:remove', { id });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
