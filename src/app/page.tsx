@@ -2539,6 +2539,8 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [routeMotel, setRouteMotel] = useState<Motel | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const openGoogleMaps = (motel: Motel) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${motel.coordinates.lat},${motel.coordinates.lng}`;
@@ -2581,6 +2583,7 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
           lng: position.coords.longitude,
         });
         setIsLocating(false);
+        setHasSearched(true);
       },
       (error) => {
         setLocationError('Não foi possível obter sua localização');
@@ -2590,11 +2593,43 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
     );
   };
 
+  const handleSearch = async () => {
+    setIsSearching(true);
+    setHasSearched(true);
+    
+    // If there's a search query but no location yet, try to geocode it
+    if (searchQuery && searchQuery.length >= 3 && !userLocation) {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=br`
+        );
+        const data = await response.json();
+        if (data && data.length > 0) {
+          setUserLocation({
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon)
+          });
+        }
+      } catch (error) {
+        console.error('Error geocoding search query:', error);
+      }
+    }
+    
+    setIsSearching(false);
+  };
+
+  // Filter motels by state
+  const filteredByState = selectedState === 'Todos os Estados'
+    ? sampleMotels.filter(m => m.status === 'active')
+    : sampleMotels.filter(m => m.status === 'active' && m.state === selectedState);
+
+  // Sort motels by distance if user location is available
   const sortedMotels = userLocation 
-    ? [...sampleMotels.filter(m => m.status === 'active')].sort((a, b) => {
+    ? [...filteredByState].sort((a, b) => {
         const distA = calculateDistance(userLocation.lat, userLocation.lng, a.coordinates.lat, a.coordinates.lng);
         const distB = calculateDistance(userLocation.lat, userLocation.lng, b.coordinates.lat, b.coordinates.lng);
         
+        // Premium motels within 20km get priority
         if (distA <= 20 && distB <= 20) {
           if (a.isPremium && !b.isPremium) return -1;
           if (!a.isPremium && b.isPremium) return 1;
@@ -2604,12 +2639,13 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
         if (distA <= 20 && distB > 20) return -1;
         if (distA > 20 && distB <= 20) return 1;
         
+        // Premium motels always get some priority
         if (a.isPremium && !b.isPremium) return -1;
         if (!a.isPremium && b.isPremium) return 1;
         
         return distA - distB;
       })
-    : sampleMotels.filter(m => m.status === 'active');
+    : filteredByState;
 
   const getDistanceString = (motel: Motel): string => {
     if (!userLocation) return motel.distance;
@@ -2660,11 +2696,15 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
                         lat: parseFloat(suggestion.lat),
                         lng: parseFloat(suggestion.lon)
                       });
+                      setHasSearched(true);
                     }}
                     placeholder="Buscar motel, cidade ou endereço..."
                   />
                 </div>
-                <Select value={selectedState} onValueChange={setSelectedState}>
+                <Select value={selectedState} onValueChange={(value) => {
+                  setSelectedState(value);
+                  setHasSearched(true);
+                }}>
                   <SelectTrigger className="w-full md:w-48 bg-[#121212] border-[#333333] text-white">
                     <MapPin className="w-4 h-4 mr-2 text-[#FF0033]" />
                     <SelectValue placeholder="Estado" />
@@ -2694,8 +2734,16 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
                   )}
                   {userLocation ? 'Localizado' : 'Localizar'}
                 </Button>
-                <Button className="bg-[#FF0033] hover:bg-[#CC0029] text-white px-8">
-                  <Search className="w-4 h-4 mr-2" />
+                <Button 
+                  onClick={handleSearch}
+                  disabled={isSearching}
+                  className="bg-[#FF0033] hover:bg-[#CC0029] text-white px-8"
+                >
+                  {isSearching ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  ) : (
+                    <Search className="w-4 h-4 mr-2" />
+                  )}
                   Buscar
                 </Button>
               </div>
@@ -2717,9 +2765,19 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
       <section className="py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white">
-              {userLocation ? 'Motéis Mais Próximos' : 'Todos os Motéis'}
-            </h2>
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                {hasSearched 
+                  ? (userLocation ? 'Motéis Mais Próximos' : `Motéis ${selectedState !== 'Todos os Estados' ? `em ${selectedState}` : ''}`)
+                  : 'Todos os Motéis'}
+              </h2>
+              {hasSearched && (
+                <p className="text-gray-400 text-sm mt-1">
+                  {sortedMotels.length} motel{sortedMotels.length !== 1 ? 's' : ''} encontrado{sortedMotels.length !== 1 ? 's' : ''}
+                  {userLocation && ' - ordenado por distância'}
+                </p>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button
                 variant={viewMode === 'list' ? 'default' : 'outline'}
@@ -2749,6 +2807,27 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
           </div>
 
           {viewMode === 'list' ? (
+            sortedMotels.length === 0 ? (
+              <div className="text-center py-16">
+                <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-white mb-2">Nenhum motel encontrado</h3>
+                <p className="text-gray-400 mb-4">
+                  Não há motéis cadastrados {selectedState !== 'Todos os Estados' ? `em ${selectedState}` : 'com os filtros selecionados'}.
+                </p>
+                <Button
+                  onClick={() => {
+                    setSelectedState('Todos os Estados');
+                    setSearchQuery('');
+                    setUserLocation(null);
+                    setHasSearched(false);
+                  }}
+                  variant="outline"
+                  className="border-[#FF0033] text-[#FF0033] hover:bg-[#FF0033]/10"
+                >
+                  Limpar filtros
+                </Button>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sortedMotels.map((motel) => (
                 <Card 
@@ -2844,6 +2923,7 @@ function HomePage({ setCurrentPage, setSelectedMotel }: { setCurrentPage: (page:
                 </Card>
               ))}
             </div>
+            )
           ) : (
             <div className="bg-[#1E1E1E] rounded-xl border border-[#333333] overflow-hidden">
               <div className="h-[500px] relative rounded-xl overflow-hidden">
